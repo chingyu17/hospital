@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小鎮心安診所 - 模擬醫生開藥與住院系統v6.0</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .pulse-bed {
+            animation: pulse-border 2s infinite;
+        }
+        @keyframes pulse-border {
+            0% { border-color: rgba(99, 102, 241, 0.4); }
+            50% { border-color: rgba(99, 102, 241, 1); }
+            100% { border-color: rgba(99, 102, 241, 0.4); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center flex-wrap gap-2">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">🩺</span>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold tracking-wide">小鎮心安診所 - 模擬醫生開藥與住院系統v6.0</h1>
+                    <p class="text-[10px] text-indigo-200">巡房加藥、出院康復度、罕見疾病與智慧防誤扣評分</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 sm:space-x-4 text-xs md:text-sm">
+                <div class="bg-indigo-800/80 px-2.5 py-1 rounded-lg">診治數：<span id="stat-patients" class="font-bold text-yellow-300">0</span> 位</div>
+                <div class="bg-indigo-800/80 px-2.5 py-1 rounded-lg">診所評分：<span id="stat-score" class="font-bold text-green-300">100</span> 分</div>
+                <div class="bg-indigo-900/90 px-2.5 py-1 rounded-lg border border-indigo-500/50">
+                    🛏️ 床位：<span id="stat-beds" class="font-bold text-cyan-300">0 / 2</span>
+                </div>
+                
+                <nav class="flex space-x-1 bg-indigo-900/60 p-1 rounded-xl">
+                    <button onclick="switchTab('clinic')" id="btn-tab-clinic" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg transition font-medium text-white shadow">診間門診</button>
+                    <button onclick="switchTab('ward')" id="btn-tab-ward" class="hover:bg-indigo-600/60 px-3 py-1.5 rounded-lg transition font-medium text-indigo-100 flex items-center gap-1">
+                        <span>留觀病房</span>
+                        <span id="ward-badge" class="hidden bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+                    </button>
+                    <button onclick="switchTab('pharmacy')" id="btn-tab-pharmacy" class="hover:bg-indigo-600/60 px-3 py-1.5 rounded-lg transition font-medium text-indigo-100">診所藥房</button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-6 flex-1 w-full">
+
+        <!-- ===== 1. 診間門診分頁 ===== -->
+        <div id="tab-clinic" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- 左側：病患資訊與罕疾病徵提示 -->
+            <div class="lg:col-span-5 space-y-5">
+                
+                <!-- 病患基本資料卡 -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <span id="patient-tag" class="bg-blue-100 text-blue-800 font-bold text-xs px-2 py-0.5 rounded">初診</span>
+                                <span id="patient-rare-tag" class="hidden bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-300 font-bold text-xs px-2 py-0.5 rounded animate-pulse">🧬 罕見/疑難病例</span>
+                                <span id="patient-chronic" class="hidden bg-purple-100 text-purple-800 font-bold text-xs px-2 py-0.5 rounded">慢性處方</span>
+                                <span id="patient-regular-admit" class="hidden bg-amber-100 text-amber-800 font-bold text-xs px-2 py-0.5 rounded">🔄 定期住院點滴</span>
+                            </div>
+                            <h2 id="patient-name" class="text-xl font-bold text-slate-800 mt-1.5">--</h2>
+                        </div>
+                        <div class="text-right text-xs text-slate-500">
+                            <div>性別/年齡：<span id="patient-gender-age">--</span></div>
+                            <div>病歷號：#<span id="patient-id">0000</span></div>
+                        </div>
+                    </div>
+
+                    <!-- 病患主訴與發言 -->
+                    <div class="bg-indigo-50/70 p-3.5 rounded-lg border border-indigo-100 mb-4">
+                        <div class="text-xs font-semibold text-indigo-900 mb-1 flex items-center justify-between">
+                            <span>🗣️ 病人主訴與狀況：</span>
+                            <span id="bed-status-indicator" class="text-[11px] text-slate-500"></span>
+                        </div>
+                        <p id="patient-dialogue" class="text-sm text-indigo-950 italic">「請點擊下方的『下一位病人』按鈕開始看診。」</p>
+                    </div>
+
+                    <!-- 症狀標籤列表 -->
+                    <div class="mb-4">
+                        <div class="text-xs text-slate-500 mb-1">檢查症狀列表：</div>
+                        <div id="patient-symptoms-tags" class="flex flex-wrap gap-1.5">
+                            <span class="text-xs text-slate-400">無資料</span>
+                        </div>
+                    </div>
+
+                    <!-- 快篩站與檢測 -->
+                    <div class="border-t border-slate-100 pt-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold text-slate-600">🧪 現場快篩檢測（新冠 / 流感）</span>
+                            <button id="btn-run-test" onclick="runRapidTest()" class="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded shadow-sm transition disabled:opacity-50" disabled>進行快篩</button>
+                        </div>
+                        <div id="test-result-box" class="bg-slate-50 p-2.5 rounded border border-slate-200 text-xs text-slate-600">
+                            快篩狀態：尚未進行檢測
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 診斷提示與鑑別診斷報告 -->
+                <div class="bg-amber-50/80 border border-amber-200 p-4 rounded-xl shadow-sm">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-sm font-bold text-amber-900 flex items-center gap-1">
+                            <span>🔍 診間初步診斷報告</span>
+                            <span class="text-[11px] font-normal text-amber-700">(含鑑別診斷/罕疾提示)</span>
+                        </h3>
+                    </div>
+                    <div id="diagnostic-hint" class="text-xs md:text-sm text-amber-950 bg-white/80 p-2.5 rounded border border-amber-100 leading-relaxed">
+                        請呼叫病人進行初步評估...
+                    </div>
+                </div>
+
+                <!-- 叫號控制按鈕 -->
+                <div class="flex gap-3">
+                    <button onclick="nextPatient()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow transition text-center flex items-center justify-center gap-2">
+                        <span>👤 叫號：下一位病人</span>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- 右側：處方簽與開立住院單區 -->
+            <div class="lg:col-span-7 space-y-5">
+                
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2.5 mb-3">
+                        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <span>📝 開立處方箋與醫療處置</span>
+                        </h3>
+                        <span class="text-xs text-slate-500">同類相近藥物皆可獲認可，無病毒反應不扣抗病毒藥</span>
+                    </div>
+
+                    <!-- 選擇藥品/針劑與加入處方欄位 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        <div class="sm:col-span-5">
+                            <label class="block text-xs font-medium text-slate-600 mb-1">選擇藥品/針劑/點滴</label>
+                            <select id="select-drug" class="w-full text-xs p-2 rounded border border-slate-300 focus:ring-2 focus:ring-indigo-500">
+                                <!-- 動態載入藥物 -->
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-medium text-slate-600 mb-1">次量/劑量</label>
+                            <select id="select-dosage" class="w-full text-xs p-2 rounded border border-slate-300">
+                                <option value="1錠(包)" selected>1 錠/包</option>
+                                <option value="0.5錠(包)">0.5 錠/包</option>
+                                <option value="2錠(包)">2 錠/包</option>
+                                <option value="1瓶/靜脈滴注">1 瓶/靜脈滴注</option>
+                                <option value="1支/靜脈注射">1 支/靜脈注射</option>
+                                <option value="1支/肌肉注射">1 支/肌肉注射</option>
+                                <option value="適量塗抹/滴用">適量塗抹/滴用</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-3">
+                            <label class="block text-xs font-medium text-slate-600 mb-1">給藥頻率/途徑</label>
+                            <select id="select-freq" class="w-full text-xs p-2 rounded border border-slate-300">
+                                <option value="TID (每日三次)" selected>TID (每日3次)</option>
+                                <option value="BID (每日兩次)">BID (每日2次)</option>
+                                <option value="QD (每日一次)">QD (每日1次)</option>
+                                <option value="IV Drip (靜脈滴注)">IV Drip (靜脈滴注)</option>
+                                <option value="IV Push (靜脈推注)">IV Push (靜脈推注)</option>
+                                <option value="IM (肌肉注射)">IM (肌肉注射)</option>
+                                <option value="PRN (需要時)">PRN (需要時)</option>
+                                <option value="HS (睡前)">HS (睡前1次)</option>
+                            </select>
+                        </div>
+                        <div class="sm:col-span-2 flex items-end">
+                            <button onclick="addDrugToPrescription()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 text-xs rounded transition">
+                                ➕ 加入處方
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 天數設定與專屬「📄 開立住院單」按鈕區 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-4">
+                        <div class="sm:col-span-6 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100 flex items-center justify-between">
+                            <span class="text-xs font-bold text-indigo-900">🗓️ 給藥天數：</span>
+                            <div class="flex items-center space-x-1.5">
+                                <input type="range" id="input-days-slider" min="1" max="30" value="3" oninput="syncDays(this.value)" class="w-20 accent-indigo-600">
+                                <select id="select-days" onchange="syncDays(this.value)" class="text-xs p-1 rounded border border-slate-300 font-bold text-indigo-700">
+                                    <option value="1">1 天</option>
+                                    <option value="3" selected>3 天</option>
+                                    <option value="7">7 天</option>
+                                    <option value="14">14 天</option>
+                                    <option value="28">28 天</option>
+                                    <option value="30">30 天 (慢性)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="sm:col-span-6 flex items-center">
+                            <button onclick="openAdmissionModal()" id="btn-open-admit-modal" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-3 rounded-lg shadow transition flex items-center justify-center gap-1.5 text-xs">
+                                <span>📄 開立住院單 (安排病床/點滴)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 暫存住院單狀態標籤 -->
+                    <div id="pending-admission-badge" class="hidden mb-3 p-2.5 bg-purple-100 border border-purple-300 rounded-lg flex justify-between items-center text-xs text-purple-900">
+                        <div>
+                            <span class="font-bold">🏥 已準備開立住院單：</span>
+                            <span id="pending-admit-reason" class="italic">--</span>
+                        </div>
+                        <button onclick="cancelPendingAdmission()" class="text-purple-700 hover:text-purple-900 underline font-bold">取消住院</button>
+                    </div>
+
+                    <!-- 目前處方列表 -->
+                    <div class="border border-slate-200 rounded-lg overflow-hidden mb-4">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2">藥品/針劑名稱</th>
+                                    <th class="p-2">分類 / 機轉</th>
+                                    <th class="p-2">單次劑量</th>
+                                    <th class="p-2">頻率/途徑</th>
+                                    <th class="p-2 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rx-table-body" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="5" class="p-4 text-center text-slate-400">尚無加入任何藥品或針劑</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 送出處方/完成看診按鈕 -->
+                    <div class="flex gap-2">
+                        <button onclick="submitPrescription()" id="btn-submit-rx" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition disabled:opacity-50 text-sm" disabled>
+                            ✅ 完成看診 / 送出處方與住院處置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 診斷歷史與評分反饋報告 -->
+                <div id="feedback-card" class="hidden bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="text-xs md:text-sm font-bold text-slate-800 mb-2 flex items-center justify-between">
+                        <span>📋 上一位看診/處方評分檢討報告</span>
+                        <span id="feedback-score-badge" class="px-2 py-0.5 rounded text-xs font-bold">-- 分</span>
+                    </h3>
+                    <div id="feedback-content" class="text-xs leading-relaxed text-slate-700 space-y-1.5">
+                        <!-- 動態填充 -->
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- ===== 2. 留觀病房分頁 (雙人床 + 巡房與康復度) ===== -->
+        <div id="tab-ward" class="hidden space-y-6">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <span>🏥 診所留觀病房 (雙人病床)</span>
+                            <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-normal">支援醫師巡房床邊加藥與康復指數結算</span>
+                        </h2>
+                        <p class="text-xs text-slate-500">點擊「🩺 醫師巡房」可查看最新狀況並追加處方，點滴結束可計算康復評分辦理出院。</p>
+                    </div>
+                    <button onclick="switchTab('clinic')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-lg transition">
+                        ⬅️ 返回診間門診
+                    </button>
+                </div>
+
+                <!-- 兩張病床卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- 床位 A -->
+                    <div id="bed-card-0" class="border-2 border-dashed border-slate-200 rounded-xl p-5 bg-slate-50/50 transition relative">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="font-bold text-slate-700 flex items-center gap-1.5 text-sm">
+                                <span>🛏️ 床位 A (Bed A)</span>
+                            </span>
+                            <span id="bed-status-tag-0" class="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">空床中</span>
+                        </div>
+
+                        <div id="bed-empty-0" class="py-10 text-center text-slate-400 text-xs">
+                            目前無病人入住 <br>於門診彈窗開立住院單後將安排至此床位
+                        </div>
+
+                        <div id="bed-occupied-0" class="hidden space-y-3">
+                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-1.5 text-xs">
+                                <div class="flex justify-between font-bold text-slate-800 text-sm">
+                                    <span id="bed-patient-name-0">--</span>
+                                    <span id="bed-patient-id-0" class="text-slate-400 font-normal">#0000</span>
+                                </div>
+                                <div class="text-slate-600">診斷病因：<span id="bed-patient-disease-0" class="font-semibold text-slate-700">--</span></div>
+                                <div class="text-slate-600">目前處方：<span id="bed-patient-iv-0" class="text-indigo-700 font-medium">--</span></div>
+                                <div class="text-slate-600">床邊追加處方：<span id="bed-patient-rounds-add-0" class="text-purple-700 font-medium">無</span></div>
+                            </div>
+
+                            <!-- 倒數計時與進度條 -->
+                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="font-bold text-slate-700 flex items-center gap-1">
+                                        <span class="animate-spin text-indigo-600">💧</span> 點滴滴注與留觀進度
+                                    </span>
+                                    <span id="bed-time-remaining-0" class="font-mono font-bold text-indigo-600">00:00</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                    <div id="bed-progress-0" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- 病床操作按鈕：加入巡房 -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="openRoundsModal(0)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-2 text-xs rounded transition shadow-sm">
+                                    🩺 醫師巡房/加藥
+                                </button>
+                                <button onclick="speedUpBed(0, 10)" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1.5 px-2 text-xs rounded transition shadow-sm">
+                                    ⚡ 10x 加速 (-10分)
+                                </button>
+                            </div>
+                            <div>
+                                <button onclick="dischargeBed(0)" id="btn-discharge-0" class="w-full bg-slate-300 text-slate-500 font-bold py-2 text-xs rounded cursor-not-allowed transition" disabled>
+                                    🏥 辦理出院與結算康復度
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 床位 B -->
+                    <div id="bed-card-1" class="border-2 border-dashed border-slate-200 rounded-xl p-5 bg-slate-50/50 transition relative">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="font-bold text-slate-700 flex items-center gap-1.5 text-sm">
+                                <span>🛏️ 床位 B (Bed B)</span>
+                            </span>
+                            <span id="bed-status-tag-1" class="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">空床中</span>
+                        </div>
+
+                        <div id="bed-empty-1" class="py-10 text-center text-slate-400 text-xs">
+                            目前無病人入住 <br>於門診彈窗開立住院單後將安排至此床位
+                        </div>
+
+                        <div id="bed-occupied-1" class="hidden space-y-3">
+                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-1.5 text-xs">
+                                <div class="flex justify-between font-bold text-slate-800 text-sm">
+                                    <span id="bed-patient-name-1">--</span>
+                                    <span id="bed-patient-id-1" class="text-slate-400 font-normal">#0000</span>
+                                </div>
+                                <div class="text-slate-600">診斷病因：<span id="bed-patient-disease-1" class="font-semibold text-slate-700">--</span></div>
+                                <div class="text-slate-600">目前處方：<span id="bed-patient-iv-1" class="text-indigo-700 font-medium">--</span></div>
+                                <div class="text-slate-600">床邊追加處方：<span id="bed-patient-rounds-add-1" class="text-purple-700 font-medium">無</span></div>
+                            </div>
+
+                            <!-- 倒數計時與進度條 -->
+                            <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="font-bold text-slate-700 flex items-center gap-1">
+                                        <span class="animate-spin text-indigo-600">💧</span> 點滴滴注與留觀進度
+                                    </span>
+                                    <span id="bed-time-remaining-1" class="font-mono font-bold text-indigo-600">00:00</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                    <div id="bed-progress-1" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- 病床操作按鈕 -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="openRoundsModal(1)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-2 text-xs rounded transition shadow-sm">
+                                    🩺 醫師巡房/加藥
+                                </button>
+                                <button onclick="speedUpBed(1, 10)" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1.5 px-2 text-xs rounded transition shadow-sm">
+                                    ⚡ 10x 加速 (-10分)
+                                </button>
+                            </div>
+                            <div>
+                                <button onclick="dischargeBed(1)" id="btn-discharge-1" class="w-full bg-slate-300 text-slate-500 font-bold py-2 text-xs rounded cursor-not-allowed transition" disabled>
+                                    🏥 辦理出院與結算康復度
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 3. 診所藥房分頁 ===== -->
+        <div id="tab-pharmacy" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">💊 診所擴充藥物與點滴針劑資料庫</h2>
+                        <p class="text-xs text-slate-500">收錄口服藥、免疫球蛋白、消炎針、止血針、胃腸針與罕疾病症對應藥物。</p>
+                    </div>
+                    <button onclick="openAddDrugModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition">
+                        ➕ 新增藥品/針劑
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <th class="p-3">藥品/針劑名稱</th>
+                                <th class="p-3">主要分類 / 機轉</th>
+                                <th class="p-3">適應症 / 功效關鍵字</th>
+                                <th class="p-3">建議給藥途徑</th>
+                                <th class="p-3 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pharmacy-table-body" class="divide-y divide-slate-100">
+                            <!-- 動態載入 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ===== Modal 1: 🩺 醫師巡房與床邊加藥彈窗 ===== -->
+    <div id="modal-rounds" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <span>🩺 醫師巡房與床邊關懷加藥</span>
+                </h3>
+                <button onclick="closeRoundsModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+            </div>
+            
+            <div class="space-y-3 text-xs text-slate-700">
+                <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 text-indigo-950">
+                    <div class="font-bold flex justify-between mb-1">
+                        <span id="rounds-patient-name">--</span>
+                        <span id="rounds-bed-name" class="text-indigo-700 font-mono">--</span>
+                    </div>
+                    <div class="text-[11px] text-slate-600">診斷病因：<span id="rounds-patient-disease">--</span></div>
+                </div>
+
+                <!-- 床邊訴求 -->
+                <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-amber-900">
+                    <strong class="block text-amber-950 mb-1">💬 病人當前床邊訴求與反應：</strong>
+                    <p id="rounds-patient-feedback" class="italic leading-relaxed">「點滴打到一半，覺得有點頭昏...」</p>
+                </div>
+
+                <!-- 追加藥品選擇區 -->
+                <div class="border border-slate-200 p-3 rounded-lg bg-slate-50 space-y-2">
+                    <label class="block font-bold text-slate-800">➕ 追加/調整床邊口服藥或針劑：</label>
+                    <div class="flex gap-2">
+                        <select id="rounds-select-drug" class="flex-1 text-xs p-2 rounded border border-slate-300">
+                            <!-- 動態載入藥物 -->
+                        </select>
+                        <button onclick="addRoundsDrug()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-2 rounded transition">
+                            追加處方
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 目前巡房追加清單 -->
+                <div>
+                    <span class="font-bold text-slate-800">📋 本次巡房已追加之藥物列表：</span>
+                    <ul id="rounds-added-list" class="mt-1 space-y-1 bg-white p-2 rounded border border-slate-200 min-h-[40px]">
+                        <li class="text-slate-400 italic">尚無追加任何藥品</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button onclick="closeRoundsModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow hover:bg-indigo-700 transition">完成巡房並儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: 📄 開立住院同意與診斷單彈窗 -->
+    <div id="modal-admission" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-slate-100">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <span>📄 住院留觀同意與醫師診斷單</span>
+                </h3>
+                <button onclick="closeAdmissionModal()" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+            </div>
+            
+            <div class="space-y-3 text-xs text-slate-700">
+                <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-amber-900">
+                    <strong>【醫師診斷開立聲明】</strong><br>
+                    <span class="text-xs">經 醫師 診斷，認為該位病患目前病情狀況需要立即入住病房接受點滴滴注、藥物注射與密切生命徵象留觀。</span>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-800 mb-1">病患姓名與病歷號：</label>
+                    <div id="modal-admit-patient-info" class="p-2 bg-slate-100 rounded text-slate-700 font-medium">--</div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-800 mb-1">住院原因 / 診斷病因 (醫師可自行手動修改編修)：</label>
+                    <textarea id="modal-admit-reason-input" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="請輸入診斷病因..."></textarea>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-800 mb-1">預估住院留觀時間：</label>
+                    <select id="modal-admit-time-select" class="w-full p-2 border border-slate-300 rounded text-xs font-semibold text-indigo-700">
+                        <option value="5">5 分鐘 (輕度留觀補充水分)</option>
+                        <option value="10" selected>10 分鐘 (標準點滴滴注與症狀控制)</option>
+                        <option value="15">15 分鐘 (重度感染與高濃度藥物靜脈滴注)</option>
+                        <option value="30">30 分鐘 (深度觀察與複合處方)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+                <button onclick="closeAdmissionModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-300 transition">取消</button>
+                <button onclick="confirmAdmissionFromModal()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow transition">✅ 確認開立住院單</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: ➕ 新增藥品彈窗 -->
+    <div id="modal-add-drug" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4">
+            <h3 class="text-base font-bold text-slate-800 border-b border-slate-100 pb-2">➕ 新增藥劑/保健品/點滴針劑</h3>
+            
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700 mb-1">藥品/針劑名稱</label>
+                    <input type="text" id="new-drug-name" placeholder="例如：血漿擴張劑 (Voluven)" class="w-full p-2 border border-slate-300 rounded">
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-700 mb-1">分類/機轉</label>
+                    <select id="new-drug-cat" class="w-full p-2 border border-slate-300 rounded">
+                        <option value="點滴/注射針劑">點滴/注射針劑</option>
+                        <option value="止痛/解熱">止痛/解熱</option>
+                        <option value="止咳/化痰">止咳/化痰</option>
+                        <option value="抗過敏">抗過敏</option>
+                        <option value="胃藥/制酸">胃藥/制酸</option>
+                        <option value="抗病毒特效藥">抗病毒特效藥</option>
+                        <option value="慢性病/三高">慢性病/三高</option>
+                        <option value="保健/營養">保健/營養</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-700 mb-1">適應症 (關鍵字逗號分隔)</label>
+                    <input type="text" id="new-drug-indications" placeholder="例如：低血容積,體液補充" class="w-full p-2 border border-slate-300 rounded">
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-700 mb-1">建議標準給藥途徑/頻率</label>
+                    <select id="new-drug-freq" class="w-full p-2 border border-slate-300 rounded">
+                        <option value="IV Drip (靜脈滴注)">IV Drip (靜脈滴注)</option>
+                        <option value="IV Push (靜脈推注)">IV Push (靜脈推注)</option>
+                        <option value="IM (肌肉注射)">IM (肌肉注射)</option>
+                        <option value="TID (每日三次)">TID (每日3次)</option>
+                        <option value="BID (每日兩次)">BID (每日2次)</option>
+                        <option value="QD (每日一次)">QD (每日1次)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                <button onclick="closeAddDrugModal()" class="px-3 py-1.5 bg-slate-200 text-slate-700 rounded text-xs font-medium">取消</button>
+                <button onclick="saveNewDrug()" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-bold">儲存新增</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. 大擴充藥物資料庫
+        // =========================================================================
+        let drugDatabase = [
+            // 點滴與注射針劑 (IV / IM)
+            { id: 'i1', name: '0.9% Normal Saline (生理食鹽水 500ml)', category: '點滴/注射針劑', indications: ['脫水', '腸胃炎失水', '水電解質不平衡'], reqFreq: 'IV Drip (靜脈滴注)', reqDose: '1瓶/靜脈滴注' },
+            { id: 'i2', name: 'Amino Acid & Glucose (高濃度營養液 500ml)', category: '點滴/注射針劑', indications: ['虛弱', '營養不良', '無法進食', '衰退'], reqFreq: 'IV Drip (靜脈滴注)', reqDose: '1瓶/靜脈滴注' },
+            { id: 'i3', name: 'IVIG (靜脈注射免疫球蛋白 5g)', category: '點滴/注射針劑', indications: ['免疫缺陷', '川崎氏症', '吉巴氏綜合症', '重症感染'], reqFreq: 'IV Drip (靜脈滴注)', reqDose: '1瓶/靜脈滴注' },
+            { id: 'i4', name: 'Hemo-C (血可補/補血針劑 5ml)', category: '點滴/注射針劑', indications: ['貧血', '缺鐵性貧血', '體力虛弱'], reqFreq: 'IV Push (靜脈推注)', reqDose: '1支/靜脈注射' },
+            { id: 'i5', name: 'Lactated Ringer\'s (複方林格氏液 500ml)', category: '點滴/注射針劑', indications: ['急性失水', '腹瀉脫水', '循環不足'], reqFreq: 'IV Drip (靜脈滴注)', reqDose: '1瓶/靜脈滴注' },
+            { id: 'i6', name: 'Vit-B Complex Injection (維生素B/C點滴針劑)', category: '點滴/注射針劑', indications: ['疲勞', '倦怠', '免疫調節', '感冒虛弱'], reqFreq: 'IV Drip (靜脈滴注)', reqDose: '1瓶/靜脈滴注' },
+            { id: 'i7', name: 'Dexamethasone (地塞米松/強效消炎針)', category: '點滴/注射針劑', indications: ['嚴重發炎', '喉嚨腫痛', '急性過敏', '氣喘', '神經發炎'], reqFreq: 'IV Push (靜脈推注)', reqDose: '1支/靜脈注射' },
+            { id: 'i8', name: 'Transamin (斷血炎/止血針劑)', category: '點滴/注射針劑', indications: ['出血', '異常出血', '咽喉嚴重充血'], reqFreq: 'IV Push (靜脈推注)', reqDose: '1支/靜脈注射' },
+            { id: 'i9', name: 'Primperan (保胃樂/胃腸蠕動止吐針)', category: '點滴/注射針劑', indications: ['嚴重嘔吐', '腸胃蠕動異常', '噁心'], reqFreq: 'IM (肌肉注射)', reqDose: '1支/肌肉注射' },
+
+            // 止痛 / 解熱類
+            { id: 'd1', name: 'Acetaminophen (乙醯胺酚 500mg)', category: '止痛/解熱', indications: ['發燒', '頭痛', '肌肉酸痛', '咽喉痛'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd2', name: 'Panadol Extra (普拿疼強效錠)', category: '止痛/解熱', indications: ['頭痛', '發燒', '關節痛'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd3', name: 'Ibuprofen (布洛芬 400mg)', category: '止痛/解熱', indications: ['發燒', '咽喉痛', '經痛', '關節發炎', '草莓舌消炎'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd4', name: 'Ponstan (博斯添/博拿疼 500mg)', category: '止痛/解熱', indications: ['劇烈疼痛', '發炎性疼痛', '經痛', '牙痛'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd_aspirin', name: 'Aspirin (阿斯匹靈 100mg/高劑量消炎)', category: '止痛/解熱', indications: ['川崎氏症', '抗凝血', '血管發炎'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+
+            // 止咳 / 化痰類
+            { id: 'd5', name: 'Medicon (美得康錠)', category: '止咳/化痰', indications: ['乾咳', '咳嗽'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd6', name: 'Ambroxol (安嗽受錠)', category: '止咳/化痰', indications: ['濃痰', '咳嗽', '支氣管炎'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd7', name: 'Acetylcysteine (愛克痰發泡錠 600mg)', category: '止咳/化痰', indications: ['頑固濃痰', '呼吸道粘液', '慢性支氣管炎'], reqFreq: 'BID (每日兩次)', reqDose: '1錠(包)' },
+
+            // 抗過敏類
+            { id: 'd8', name: 'Xyzal (驅異樂 5mg)', category: '抗過敏', indications: ['流鼻水', '過敏性鼻炎', '蕁麻疹'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd9', name: 'Minilag (敏樂寂錠)', category: '抗過敏', indications: ['流鼻水', '鼻塞', '打噴嚏'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd10', name: 'Allegra (艾萊錠 180mg)', category: '抗過敏', indications: ['慢性蕁麻疹', '嚴重點頭過敏', '流鼻水'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+
+            // 胃藥 / 制酸類
+            { id: 'd11', name: 'Strocain (息斯敏胃錠)', category: '胃藥/制酸', indications: ['胃痛', '胃潰瘍', '胃酸過多', '胃痙攣', '急性紫質症腹痛'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd12', name: 'Gascon (加斯克爾消脹錠)', category: '胃藥/制酸', indications: ['胃脹氣', '腹脹'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+            { id: 'd13', name: 'Nexium (耐適恩 40mg)', category: '胃藥/制酸', indications: ['胃食道逆流', '嚴重胃潰瘍', '強效制酸'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd14', name: 'Biofermin (表飛鳴新乳酸菌)', category: '胃藥/制酸', indications: ['腹瀉', '腸胃不適', '消化不良'], reqFreq: 'TID (每日三次)', reqDose: '1錠(包)' },
+
+            // 特效藥
+            { id: 'd16', name: 'Tamiflu (克流感 75mg)', category: '抗病毒特效藥', indications: ['流感陽性', '高燒不退'], reqFreq: 'BID (每日兩次)', reqDose: '1錠(包)' },
+            { id: 'd17', name: 'Paxlovid (倍拉維抗病毒藥)', category: '抗病毒特效藥', indications: ['COVID-19陽性', '新冠確診'], reqFreq: 'BID (每日兩次)', reqDose: '1錠(包)' },
+
+            // 保健 / 營養類
+            { id: 'd18', name: 'Kentamin (開恩達命膠囊)', category: '保健/營養', indications: ['神經炎', '末梢麻木', '疲勞', '吉巴氏症恢復'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd19', name: 'Alfacalcidol (愛康鈣軟膠囊)', category: '保健/營養', indications: ['骨質疏鬆', '低血鈣'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd21', name: 'Alinamin F50 (合利他命強效錠)', category: '保健/營養', indications: ['眼睛疲勞', '肩頸僵硬', '體力衰退'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd24', name: 'Multi-Vitamin C (維生素C綜合發泡錠)', category: '保健/營養', indications: ['免疫保養', '抗氧化', '感冒恢復'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+
+            // 慢性病與心血管
+            { id: 'd22', name: 'Amlodipine (脈優錠 5mg)', category: '慢性病/三高', indications: ['高血壓', '心絞痛'], reqFreq: 'QD (每日一次)', reqDose: '1錠(包)' },
+            { id: 'd23', name: 'Metformin (庫魯化錠 500mg)', category: '慢性病/三高', indications: ['第二型糖尿病', '高血糖'], reqFreq: 'BID (每日兩次)', reqDose: '1錠(包)' },
+            { id: 'd_pti', name: 'Methimazole (甲亢平 5mg)', category: '慢性病/三高', indications: ['格雷夫斯氏病', '甲狀腺亢進', '心悸手抖'], reqFreq: 'BID (每日兩次)', reqDose: '1錠(包)' }
+        ];
+
+        // =========================================================================
+        // 2. 疾病範本 (包含 3%~5% 極低機率罕見疾病)
+        // =========================================================================
+        const rareDiseaseTemplates = [
+            {
+                type: 'RARE_KAWASAKI',
+                name: '川崎病 (Kawasaki Disease)',
+                isRare: true,
+                symptoms: ['持續高燒>5天', '雙眼草莓舌充血', '手腳掌紅腫脫皮', '頸部淋巴結腫大', '全身皮疹'],
+                dialogues: [
+                    "醫生！我家小朋友已經高燒五天退不下來了，嘴唇紅得像草莓一樣發裂，手腳還紅腫，快幫幫我們！",
+                    "燒好久了，眼睛很紅卻沒有眼屎，草莓舌頭很明顯...拜託幫忙安排留觀打點滴檢查。"
+                ],
+                recommendedCategories: ['點滴/注射針劑', '止痛/解熱'], // 偏向 IVIG 與 Aspirin
+                requiresAdmission: true,
+                defaultAdmitReason: '疑似川崎病 (Kawasaki Disease)，需立即入住留觀滴注 IVIG 免疫球蛋白並密切監測心血管',
+                baseAdmitMinutes: 12,
+                accurateHint: '🧬【罕見疑難病徵】病患高燒不退、草莓舌、手腳紅腫，高度吻合川崎病特徵。快篩通常為陰性。',
+                similarHint: '初步鑑別診斷：重症病毒性咽喉炎併皮膚猩紅熱樣疹 (相近症狀，需防範川崎病血管炎)。'
+            },
+            {
+                type: 'RARE_GBS',
+                name: '吉巴氏綜合症 (Guillain-Barré Syndrome)',
+                isRare: true,
+                symptoms: ['雙下肢漸進性無力', '手腳末梢麻木感', '深腱反射減弱', '行走困難'],
+                dialogues: [
+                    "醫生...我兩三天前開始覺得腳發麻，今天突然發現腳完全抬不起來，連走路都會摔倒！",
+                    "雙手雙腳越來越沒力氣，感覺麻木感一直往上蔓延，非常害怕..."
+                ],
+                recommendedCategories: ['點滴/注射針劑', '保健/營養'], // 需 IVIG 與 B群神經修復
+                requiresAdmission: true,
+                defaultAdmitReason: '疑似急性吉巴氏綜合症 (GBS)，下肢急性肌無力，需住院滴注 IVIG 觀察呼吸肌功能',
+                baseAdmitMinutes: 15,
+                accurateHint: '🧬【罕見疑難病徵】急性對稱性下肢無力與麻木，符合急性發炎性脫髓鞘性多發性神經病變 (GBS)。',
+                similarHint: '初步鑑別診斷：急性腰椎神經根壓迫併周邊神經發炎 (極相近神經麻木衰弱表現)。'
+            },
+            {
+                type: 'RARE_GRAVES',
+                name: '格雷夫斯氏病 (Graves\' Disease / 甲亢危機)',
+                isRare: true,
+                symptoms: ['靜止時心悸>120次', '雙手細微震顫', '眼球微突', '體重快速減輕', '怕熱多汗'],
+                dialogues: [
+                    "醫生我最近心臟狂跳到快蹦出來，手一直發抖連拿杯子都會晃，明明吃很多卻一直瘦...",
+                    "全身發熱流汗，心悸到無法入睡，整個人極度焦慮虛弱..."
+                ],
+                recommendedCategories: ['慢性病/三高', '點滴/注射針劑'],
+                requiresAdmission: true,
+                defaultAdmitReason: '格雷夫斯氏病併甲狀腺毒症表現，心慢率失調，住院補充靜脈水分與心律控制',
+                baseAdmitMinutes: 10,
+                accurateHint: '🧬【罕見疑難病徵】心悸、手抖、怕熱與突眼，高度符合格雷夫斯氏甲狀腺機能亢進症。',
+                similarHint: '初步鑑別診斷：自律神經失調症併發急性恐慌發作與心動過速。'
+            },
+            {
+                type: 'RARE_PORPHYRIA',
+                name: '急性間歇性紫質症 (Acute Intermittent Porphyria)',
+                isRare: true,
+                symptoms: ['反覆劇烈腹痛', '尿液曝曬變紅褐色', '肌肉無力', '精神焦慮'],
+                dialogues: [
+                    "醫生我肚子劇痛到在地上打滾！照胃鏡又說沒事...而且我發現昨晚的尿液放在廁所竟然變成深紅褐色！",
+                    "莫名其妙的腹痛發作好幾次了，這次還伴隨手腳發麻，求求醫生救救我..."
+                ],
+                recommendedCategories: ['點滴/注射針劑', '胃藥/制酸'], // 高糖靜脈滴注與症狀緩解
+                requiresAdmission: true,
+                defaultAdmitReason: '疑似罕見急性紫質症，嚴重腹痛與代謝異常，需住院給予高濃度葡萄糖水滴注',
+                baseAdmitMinutes: 10,
+                accurateHint: '🧬【罕見疑難病徵】劇烈腹痛、深紅褐色尿液與神經症狀，為典型急性紫質症表現。',
+                similarHint: '初步鑑別診斷：難治型腸胃痙攣併疑難泌尿道代謝出血。'
+            }
+        ];
+
+        const standardDiseaseTemplates = [
+            {
+                type: 'SEVERE_DEHYDRATION',
+                name: '急性重度腸胃炎併脫水',
+                symptoms: ['嚴重嘔吐', '連續水瀉', '極度口渴', '皮膚彈性差', '血壓偏低'],
+                dialogues: [
+                    "醫生...我昨晚狂吐猛拉十幾次，連水都喝不下，頭暈眼花快昏倒了，希望能住院打點滴...",
+                    "腹瀉拉到全身沒力氣，感覺快脫水了，希望能安排留觀打個生理食鹽水和腸胃藥..."
+                ],
+                recommendedCategories: ['點滴/注射針劑', '胃藥/制酸'], 
+                requiresAdmission: true,
+                defaultAdmitReason: '急性重度腸胃炎併脫水與水電解質不平衡，無法經口進食',
+                baseAdmitMinutes: 5,
+                accurateHint: '臨床表現高度符合急性重度腸胃炎併脫水徵兆。',
+                similarHint: '初步鑑別診斷：消化不良併胃功能性痙攣與急性腸腸亢進症 (極相近表現)。'
+            },
+            {
+                type: 'SEVERE_FLU_DEBILITATED',
+                name: '流感重症併高燒虛弱',
+                symptoms: ['高燒 39.8℃', '極度倦怠', '無法走動', '全身劇烈肌肉痛'],
+                dialogues: [
+                    "發高燒燒了三天，整個人軟趴趴根本站不起來...醫生我需要住院打退燒跟強效營養點滴...",
+                    "全身痛到發抖，家屬扶我過來的，可以安排病床吊克流感跟維生素強效點滴嗎？"
+                ],
+                recommendedCategories: ['抗病毒特效藥', '點滴/注射針劑', '止痛/解熱'],
+                requiresAdmission: true,
+                defaultAdmitReason: '流感重症高燒不退併重度倦怠與全身酸痛，需住院滴注抗病毒與營養液',
+                baseAdmitMinutes: 8,
+                testPositiveType: 'FLU',
+                accurateHint: '臨床檢查高度符合流行性感冒重症併高燒衰竭徵兆。',
+                similarHint: '初步鑑別診斷：急性流行性上呼吸道感染併病毒性咽喉炎與高熱反應。'
+            },
+            {
+                type: 'FLU_MILD',
+                name: 'A型/B型流行性感冒 (輕症)',
+                symptoms: ['發燒', '肌肉酸痛', '咳嗽', '咽喉痛'],
+                dialogues: [
+                    "醫生，我昨天突然發燒，全身骨頭酸痛，家裡有人得了流感，想拿克流感。",
+                    "燒兩天了，覺得很疲倦，想開感冒藥跟退燒藥。"
+                ],
+                recommendedCategories: ['止痛/解熱', '止咳/化痰', '抗病毒特效藥'],
+                requiresAdmission: false,
+                testPositiveType: 'FLU',
+                accurateHint: '病徵符合流行性感冒輕症表現。',
+                similarHint: '初步鑑別診斷：急性病毒性咽喉炎併發發燒與全身關節酸痛。'
+            },
+            {
+                type: 'COVID_MILD',
+                name: 'COVID-19 輕症確診',
+                symptoms: ['發燒', '喉嚨刀割感', '咳嗽', '流鼻水'],
+                dialogues: [
+                    "醫生我喉嚨痛到不行，在家快篩兩條線，想來開倍拉維 (Paxlovid) 或感冒藥。",
+                    "咳嗽很厲害，身體微燒，可以幫我看看新冠處方嗎？"
+                ],
+                recommendedCategories: ['止痛/解熱', '止咳/化痰', '抗病毒特效藥'],
+                requiresAdmission: false,
+                testPositiveType: 'COVID',
+                accurateHint: '喉嚨痛與發燒吻合新型冠狀病毒感染表現。',
+                similarHint: '初步鑑別診斷：流行性急性支氣管炎併咽喉粘膜劇痛。'
+            },
+            {
+                type: 'ALLERGY_HEALTH',
+                name: '慢性過敏與神經疲勞',
+                symptoms: ['打噴嚏', '蕁麻疹', '末梢麻木', '疲勞'],
+                dialogues: [
+                    "醫生我過敏很嚴重，想開『驅異樂』或同類過敏藥，另外手腳常麻麻的想開保養品。",
+                    "最近皮膚發癢，又常常肩頸酸痛，請幫我開過敏藥和合利他命保養。"
+                ],
+                recommendedCategories: ['抗過敏', '保健/營養'],
+                requiresAdmission: false,
+                accurateHint: '臨床表現符合過敏性鼻炎與末梢神經不適。',
+                similarHint: '初步鑑別診斷：環境氣候變化引發之呼吸道過敏反應併血管運動性鼻炎。'
+            }
+        ];
+
+        const roundsFeedbackOptions = [
+            "醫生...點滴打到一半，我覺得頭還是有點發昏，可以追加一顆止痛或補血針嗎？",
+            "燒已經退不少了，不過胃裡面滾滾的有點噁心嘔吐感...",
+            "感覺好多了！但喉嚨還是蠻乾蠻痛的，想開點喉嚨藥錠。",
+            "手腳麻木感減輕了，謝謝醫生關心！還有需要補充什麼點滴嗎？",
+            "點滴滴得挺順暢的，只是有點口渴跟微脹氣。"
+        ];
+
+        const firstNames = ['陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '楊', '許', '鄭', '謝', '郭'];
+        const lastNames = ['建宏', '淑芬', '志明', '美玲', '冠宇', '雅婷', '家豪', '麗華', '宗翰', '秀英', '柏翰', '靜宜'];
+
+        // =========================================================================
+        // 3. 全域系統狀態與病床監控
+        // =========================================================================
+        let currentPatient = null;
+        let currentPrescription = [];
+        let testResult = null;
+        let totalPatientsCount = 0;
+        let totalScoreSum = 0;
+
+        let pendingAdmission = null;
+        let activeRoundsBedIndex = null;
+
+        // 雙人病床狀態
+        let beds = [
+            { id: 0, name: '床位 A', occupied: false, patient: null, durationTotalSec: 0, remainingSec: 0, roundsAddedDrugs: [], patientRoundsFeedback: '' },
+            { id: 1, name: '床位 B', occupied: false, patient: null, durationTotalSec: 0, remainingSec: 0, roundsAddedDrugs: [], patientRoundsFeedback: '' }
+        ];
+
+        window.onload = function() {
+            renderDrugOptions();
+            renderPharmacyTable();
+            updateBedsUI();
+            nextPatient();
+
+            // 計時器：秒數扣減
+            setInterval(tickBeds, 1000);
+        };
+
+        function switchTab(tabName) {
+            document.getElementById('tab-clinic').classList.add('hidden');
+            document.getElementById('tab-ward').classList.add('hidden');
+            document.getElementById('tab-pharmacy').classList.add('hidden');
+
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            ['clinic', 'ward', 'pharmacy'].forEach(t => {
+                const btn = document.getElementById(`btn-tab-${t}`);
+                if (t === tabName) {
+                    btn.className = "bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg transition font-medium text-white shadow";
+                } else {
+                    btn.className = "hover:bg-indigo-600/60 px-3 py-1.5 rounded-lg transition font-medium text-indigo-100";
+                }
+            });
+        }
+
+        function syncDays(val) {
+            document.getElementById('input-days-slider').value = val;
+            document.getElementById('select-days').value = val;
+        }
+
+        function renderDrugOptions() {
+            const select = document.getElementById('select-drug');
+            const roundsSelect = document.getElementById('rounds-select-drug');
+            select.innerHTML = '';
+            roundsSelect.innerHTML = '';
+
+            drugDatabase.forEach(drug => {
+                const opt = document.createElement('option');
+                opt.value = drug.id;
+                opt.textContent = `[${drug.category}] ${drug.name}`;
+                
+                select.appendChild(opt);
+                roundsSelect.appendChild(opt.cloneNode(true));
+            });
+        }
+
+        function getFreeBedsCount() {
+            return beds.filter(b => !b.occupied).length;
+        }
+
+        // =========================================================================
+        // 4. 呼叫下一位病人 (包含 3%~5% 極低機率罕見疾病)
+        // =========================================================================
+        function nextPatient() {
+            currentPrescription = [];
+            testResult = null;
+            pendingAdmission = null;
+            updateRxTable();
+            cancelPendingAdmission();
+            
+            document.getElementById('test-result-box').innerHTML = '快篩狀態：尚未進行檢測';
+            document.getElementById('btn-run-test').disabled = false;
+            document.getElementById('btn-submit-rx').disabled = false;
+
+            const freeBeds = getFreeBedsCount();
+            
+            // 3%~5% 概率觸發罕見疾病
+            const isRareTriggered = Math.random() < 0.05; 
+            let template;
+
+            if (isRareTriggered && freeBeds > 0) {
+                template = rareDiseaseTemplates[Math.floor(Math.random() * rareDiseaseTemplates.length)];
+            } else {
+                let availableTemplates = standardDiseaseTemplates;
+                if (freeBeds === 0) {
+                    availableTemplates = standardDiseaseTemplates.filter(t => !t.requiresAdmission);
+                }
+                template = availableTemplates[Math.floor(Math.random() * availableTemplates.length)];
+            }
+
+            const name = firstNames[Math.floor(Math.random() * firstNames.length)] + lastNames[Math.floor(Math.random() * lastNames.length)];
+            const gender = Math.random() > 0.5 ? '男' : '女';
+            const age = Math.floor(Math.random() * 60) + 18;
+            const dialogue = template.dialogues[Math.floor(Math.random() * template.dialogues.length)];
+
+            currentPatient = {
+                id: Math.floor(1000 + Math.random() * 9000),
+                name: name,
+                genderAge: `${gender} / ${age}歲`,
+                disease: template,
+                dialogue: dialogue
+            };
+
+            // 更新 UI
+            document.getElementById('patient-name').textContent = currentPatient.name;
+            document.getElementById('patient-gender-age').textContent = currentPatient.genderAge;
+            document.getElementById('patient-id').textContent = currentPatient.id;
+            document.getElementById('patient-dialogue').textContent = currentPatient.dialogue;
+
+            document.getElementById('patient-tag').textContent = template.requiresAdmission ? '⚠ 重症/建議留觀' : '🆕 一般門診';
+            document.getElementById('patient-tag').className = template.requiresAdmission ? 
+                'bg-rose-100 text-rose-800 font-bold text-xs px-2 py-0.5 rounded' : 
+                'bg-blue-100 text-blue-800 font-bold text-xs px-2 py-0.5 rounded';
+
+            // 罕見疾病專屬標籤
+            if (template.isRare) {
+                document.getElementById('patient-rare-tag').classList.remove('hidden');
+            } else {
+                document.getElementById('patient-rare-tag').classList.add('hidden');
+            }
+
+            if (template.isChronic) {
+                document.getElementById('patient-chronic').classList.remove('hidden');
+            } else {
+                document.getElementById('patient-chronic').classList.add('hidden');
+            }
+
+            const bedIndicator = document.getElementById('bed-status-indicator');
+            if (freeBeds === 0) {
+                bedIndicator.innerHTML = `<span class="text-rose-600 font-bold">⚠️ 目前病床全滿 (0/2)</span>`;
+            } else {
+                bedIndicator.innerHTML = `<span class="text-emerald-600 font-bold">✅ 剩餘空床：${freeBeds} 床</span>`;
+            }
+
+            const symptomsContainer = document.getElementById('patient-symptoms-tags');
+            symptomsContainer.innerHTML = '';
+            template.symptoms.forEach(sym => {
+                const tag = document.createElement('span');
+                tag.className = 'bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-full';
+                tag.textContent = sym;
+                symptomsContainer.appendChild(tag);
+            });
+
+            // 相近初步診斷邏輯
+            const isAccurate = Math.random() >= 0.5;
+            const hintBox = document.getElementById('diagnostic-hint');
+            if (template.isRare) {
+                hintBox.innerHTML = `<span class="text-fuchsia-800 font-bold">${template.accurateHint}</span>`;
+            } else if (isAccurate) {
+                hintBox.innerHTML = `<span class="text-emerald-700 font-bold">【標準臨床提示】</span> ${template.accurateHint}`;
+            } else {
+                hintBox.innerHTML = `<span class="text-amber-800 font-bold">【相近鑑別診斷提示】</span> ${template.similarHint} <br><span class="text-[11px] text-amber-700">（提示：此為高度相近之鑑別診斷，請醫師結合症狀綜合判斷）</span>`;
+            }
+        }
+
+        function runRapidTest() {
+            if (!currentPatient) return;
+            const resultBox = document.getElementById('test-result-box');
+            const targetType = currentPatient.disease.testPositiveType;
+
+            if (currentPatient.disease.isRare) {
+                testResult = 'NEGATIVE'; // 罕見疾病快篩皆為陰性
+            } else if (targetType) {
+                testResult = Math.random() < 0.85 ? targetType : 'NEGATIVE';
+            } else {
+                testResult = Math.random() < 0.05 ? 'COVID' : 'NEGATIVE';
+            }
+
+            if (testResult === 'COVID') {
+                resultBox.innerHTML = `<span class="text-red-600 font-bold">⚠️ COVID-19 快速篩檢：【陽性 +】</span> (建議開立 Paxlovid 抗病毒藥物)`;
+            } else if (testResult === 'FLU') {
+                resultBox.innerHTML = `<span class="text-red-600 font-bold">⚠️ 流感病毒快篩：【A/B型流感 陽性 +】</span> (建議開立 克流感 Tamiflu)`;
+            } else {
+                resultBox.innerHTML = `<span class="text-emerald-600 font-bold">✅ 新冠/流感快篩：【陰性 -】</span> (無病毒感染反應，不需開立抗病毒藥)`;
+            }
+            document.getElementById('btn-run-test').disabled = true;
+        }
+
+        // =========================================================================
+        // 5. 住院同意與診斷單彈窗 Modal 邏輯
+        // =========================================================================
+        function openAdmissionModal() {
+            if (!currentPatient) return;
+            const freeBeds = getFreeBedsCount();
+            if (freeBeds === 0) {
+                alert('⚠️ 警告：目前診所留觀病房雙人病床已全滿 (0/2)！請先至留觀病房辦理出院。');
+                return;
+            }
+
+            document.getElementById('modal-admit-patient-info').textContent = `${currentPatient.name} (${currentPatient.genderAge}) - 病歷號 #${currentPatient.id}`;
+            document.getElementById('modal-admit-reason-input').value = currentPatient.disease.defaultAdmitReason || `${currentPatient.disease.name}，需留觀補充點滴與注射藥物`;
+            
+            document.getElementById('modal-admission').classList.remove('hidden');
+        }
+
+        function closeAdmissionModal() {
+            document.getElementById('modal-admission').classList.add('hidden');
+        }
+
+        function confirmAdmissionFromModal() {
+            const reason = document.getElementById('modal-admit-reason-input').value.trim();
+            const minutes = parseInt(document.getElementById('modal-admit-time-select').value);
+
+            if (!reason) {
+                alert('請輸入住院原因或診斷病因！');
+                return;
+            }
+
+            pendingAdmission = {
+                reason: reason,
+                minutes: minutes
+            };
+
+            const badge = document.getElementById('pending-admission-badge');
+            document.getElementById('pending-admit-reason').textContent = `${reason} (預計 ${minutes} 分鐘)`;
+            badge.classList.remove('hidden');
+
+            closeAdmissionModal();
+        }
+
+        function cancelPendingAdmission() {
+            pendingAdmission = null;
+            document.getElementById('pending-admission-badge').classList.add('hidden');
+        }
+
+        // =========================================================================
+        // 6. 🩺 醫師巡房與床邊關懷加藥系統 Modal
+        // =========================================================================
+        function openRoundsModal(bedIdx) {
+            const bed = beds[bedIdx];
+            if (!bed.occupied) return;
+
+            activeRoundsBedIndex = bedIdx;
+            document.getElementById('rounds-patient-name').textContent = `病患：${bed.patient.name} (#${bed.patient.id})`;
+            document.getElementById('rounds-bed-name').textContent = bed.name;
+            document.getElementById('rounds-patient-disease').textContent = bed.patient.diseaseName;
+            document.getElementById('rounds-patient-feedback').textContent = `「${bed.patientRoundsFeedback}」`;
+
+            renderRoundsAddedList();
+            document.getElementById('modal-rounds').classList.remove('hidden');
+        }
+
+        function closeRoundsModal() {
+            document.getElementById('modal-rounds').classList.add('hidden');
+            activeRoundsBedIndex = null;
+        }
+
+        function addRoundsDrug() {
+            if (activeRoundsBedIndex === null) return;
+            const drugId = document.getElementById('rounds-select-drug').value;
+            const drugObj = drugDatabase.find(d => d.id === drugId);
+            if (!drugObj) return;
+
+            const bed = beds[activeRoundsBedIndex];
+            if (bed.roundsAddedDrugs.some(d => d.id === drugId)) {
+                alert('巡房追加列表中已包含該藥物！');
+                return;
+            }
+
+            bed.roundsAddedDrugs.push(drugObj);
+            renderRoundsAddedList();
+            updateSingleBedUI(activeRoundsBedIndex);
+        }
+
+        function removeRoundsDrug(drugId) {
+            if (activeRoundsBedIndex === null) return;
+            const bed = beds[activeRoundsBedIndex];
+            bed.roundsAddedDrugs = bed.roundsAddedDrugs.filter(d => d.id !== drugId);
+            renderRoundsAddedList();
+            updateSingleBedUI(activeRoundsBedIndex);
+        }
+
+        function renderRoundsAddedList() {
+            if (activeRoundsBedIndex === null) return;
+            const bed = beds[activeRoundsBedIndex];
+            const listEl = document.getElementById('rounds-added-list');
+            listEl.innerHTML = '';
+
+            if (bed.roundsAddedDrugs.length === 0) {
+                listEl.innerHTML = `<li class="text-slate-400 italic text-xs">尚無追加任何藥品</li>`;
+                return;
+            }
+
+            bed.roundsAddedDrugs.forEach(d => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center text-xs text-purple-950 bg-purple-50 p-1.5 rounded border border-purple-200';
+                li.innerHTML = `
+                    <span>➕ ${d.name} (${d.category})</span>
+                    <button onclick="removeRoundsDrug('${d.id}')" class="text-red-600 font-bold hover:underline text-[11px]">移除</button>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        // =========================================================================
+        // 7. 處方簽清單操作
+        // =========================================================================
+        function addDrugToPrescription() {
+            const drugId = document.getElementById('select-drug').value;
+            const dosage = document.getElementById('select-dosage').value;
+            const freq = document.getElementById('select-freq').value;
+
+            const drugObj = drugDatabase.find(d => d.id === drugId);
+            if (!drugObj) return;
+
+            if (currentPrescription.some(item => item.drugId === drugId)) {
+                alert('該藥品/針劑已在處方清單中！');
+                return;
+            }
+
+            currentPrescription.push({
+                drugId: drugId,
+                name: drugObj.name,
+                category: drugObj.category,
+                dosage: dosage,
+                freq: freq
+            });
+
+            updateRxTable();
+        }
+
+        function removeDrugFromRx(index) {
+            currentPrescription.splice(index, 1);
+            updateRxTable();
+        }
+
+        function updateRxTable() {
+            const tbody = document.getElementById('rx-table-body');
+            tbody.innerHTML = '';
+
+            if (currentPrescription.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">尚無加入任何藥品或針劑</td></tr>`;
+                return;
+            }
+
+            currentPrescription.forEach((item, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50';
+                tr.innerHTML = `
+                    <td class="p-2 font-medium text-slate-800">${item.name}</td>
+                    <td class="p-2"><span class="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded">${item.category}</span></td>
+                    <td class="p-2">${item.dosage}</td>
+                    <td class="p-2">${item.freq}</td>
+                    <td class="p-2 text-right">
+                        <button onclick="removeDrugFromRx(${idx})" class="text-red-500 hover:text-red-700 font-bold text-xs">刪除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // =========================================================================
+        // 8. 智慧評分防誤扣邏輯 Engine
+        // =========================================================================
+        function submitPrescription() {
+            if (!currentPatient) return;
+
+            let score = 100;
+            let feedback = [];
+
+            // A. 住院排床
+            if (pendingAdmission) {
+                const freeBedIndex = beds.findIndex(b => !b.occupied);
+                if (freeBedIndex === -1) {
+                    alert('⚠️ 警告：目前病床已滿！無法排床。');
+                    return;
+                }
+
+                const totalSec = pendingAdmission.minutes * 60;
+                const ivDrugs = currentPrescription.filter(p => p.category === '點滴/注射針劑').map(p => p.name);
+                const ivText = ivDrugs.length > 0 ? ivDrugs.join(', ') : '0.9% 生理食鹽水點滴';
+                const randomFeedback = roundsFeedbackOptions[Math.floor(Math.random() * roundsFeedbackOptions.length)];
+
+                beds[freeBedIndex].occupied = true;
+                beds[freeBedIndex].patient = {
+                    name: currentPatient.name,
+                    id: currentPatient.id,
+                    diseaseObj: currentPatient.disease,
+                    diseaseName: pendingAdmission.reason,
+                    ivText: ivText,
+                    initialRx: [...currentPrescription]
+                };
+                beds[freeBedIndex].durationTotalSec = totalSec;
+                beds[freeBedIndex].remainingSec = totalSec;
+                beds[freeBedIndex].roundsAddedDrugs = [];
+                beds[freeBedIndex].patientRoundsFeedback = randomFeedback;
+
+                feedback.push(`📄 已開立住院單安排入住【${beds[freeBedIndex].name}】(病因：${pendingAdmission.reason})`);
+                updateBedsUI();
+            } else {
+                if (currentPatient.disease.requiresAdmission) {
+                    score -= 20;
+                    feedback.push(`❌ 病人病情重症/脫水/罕疾，建議『開立住院單』安排點滴留觀！ (-20分)`);
+                }
+            }
+
+            // B. 同類/相近藥物比對
+            const reqCategories = currentPatient.disease.recommendedCategories || [];
+            const prescribedCategories = currentPrescription.map(p => p.category);
+
+            reqCategories.forEach(cat => {
+                if (prescribedCategories.includes(cat)) {
+                    feedback.push(`✅ 正確開立【${cat}】類別或相近替代藥物/針劑 (評分通過)`);
+                } else {
+                    score -= 15;
+                    feedback.push(`❌ 處方缺乏【${cat}】類藥物或相近替代品 (-15分)`);
+                }
+            });
+
+            // C. 🛡️ 智慧評分防誤扣邏輯修正：快篩陰性或無病毒反應，絕不強求開立抗病毒藥物，絕不扣分
+            const isNoVirusReaction = (testResult === 'NEGATIVE' || !testResult || currentPatient.disease.isRare);
+
+            if (isNoVirusReaction) {
+                feedback.push(`🛡️ 【防誤扣保護啟動】快篩陰性或無病毒反應病例，未開立抗病毒藥物 (合規不扣分)`);
+            } else {
+                if (testResult === 'FLU' && !prescribedCategories.includes('抗病毒特效藥')) {
+                    score -= 25;
+                    feedback.push(`⚠️ 流感快篩陽性，未開立【克流感/抗病毒特效藥】！ (-25分)`);
+                }
+                if (testResult === 'COVID' && !prescribedCategories.includes('抗病毒特效藥')) {
+                    score -= 25;
+                    feedback.push(`⚠️ 新冠快篩陽性，未開立【Paxlovid 抗病毒特效藥】！ (-25分)`);
+                }
+            }
+
+            score = Math.max(0, Math.min(100, score));
+
+            totalPatientsCount++;
+            totalScoreSum += score;
+            const avgScore = Math.round(totalScoreSum / totalPatientsCount);
+
+            document.getElementById('stat-patients').textContent = totalPatientsCount;
+            document.getElementById('stat-score').textContent = avgScore;
+
+            // 顯示反饋
+            const feedbackCard = document.getElementById('feedback-card');
+            const feedbackContent = document.getElementById('feedback-content');
+            const scoreBadge = document.getElementById('feedback-score-badge');
+
+            feedbackCard.classList.remove('hidden');
+            scoreBadge.textContent = `${score} 分`;
+            scoreBadge.className = score >= 80 ? 'bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded' : 
+                                  (score >= 60 ? 'bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded' : 'bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded');
+
+            feedbackContent.innerHTML = `
+                <div class="font-bold text-slate-800 border-b border-slate-100 pb-1 mb-1">
+                    看診病患：${currentPatient.name} (${currentPatient.disease.name})
+                </div>
+                ${feedback.map(f => `<p>${f}</p>`).join('')}
+            `;
+
+            document.getElementById('btn-submit-rx').disabled = true;
+        }
+
+        // =========================================================================
+        // 9. 出院康復評分與復原度計算 Engine
+        // =========================================================================
+        function dischargeBed(idx) {
+            const bed = beds[idx];
+            if (!bed.occupied || bed.remainingSec > 0) return;
+
+            // 算康復分數 (0 - 100%)
+            let recoveryRate = 70; // 基礎完成點滴留觀得分
+            let bonusRounds = bed.roundsAddedDrugs.length * 10; // 巡房關懷加分
+            recoveryRate += bonusRounds;
+
+            if (bed.roundsAddedDrugs.length > 0) {
+                recoveryRate += 10; 
+            }
+
+            recoveryRate = Math.min(100, Math.max(30, recoveryRate));
+
+            let evaluationComment = "";
+            if (recoveryRate >= 95) {
+                evaluationComment = "🌟 康復非常完美！病患點滴吸收良好，且經巡房追加適當藥物，無不適症狀，歡喜出院！";
+            } else if (recoveryRate >= 80) {
+                evaluationComment = "✅ 康復狀況良好！體力已大幅恢復，可順利返家休養並定期門診複診。";
+            } else {
+                evaluationComment = "⚠️ 症狀已有初步控制，但仍有些許殘留不適，建議衛教病患持續門診追蹤。";
+            }
+
+            alert(
+                `🏥 【${bed.patient.name} 出院康復檢討報告】\n\n` +
+                `・診斷疾病：${bed.patient.diseaseName}\n` +
+                `・巡房關懷追加處方：${bed.roundsAddedDrugs.length > 0 ? bed.roundsAddedDrugs.map(d => d.name).join(', ') : '無追加'}\n` +
+                `・最終康復指數 / 復原評分：${recoveryRate}%\n` +
+                `・出院評語：${evaluationComment}`
+            );
+
+            // 清空床位
+            beds[idx].occupied = false;
+            beds[idx].patient = null;
+            beds[idx].roundsAddedDrugs = [];
+            updateBedsUI();
+        }
+
+        function tickBeds() {
+            let occupiedCount = 0;
+
+            beds.forEach((bed, idx) => {
+                if (bed.occupied) {
+                    occupiedCount++;
+                    if (bed.remainingSec > 0) {
+                        bed.remainingSec--;
+                    }
+                    updateSingleBedUI(idx);
+                }
+            });
+
+            document.getElementById('stat-beds').textContent = `${occupiedCount} / 2`;
+            const wardBadge = document.getElementById('ward-badge');
+            if (occupiedCount > 0) {
+                wardBadge.textContent = occupiedCount;
+                wardBadge.classList.remove('hidden');
+            } else {
+                wardBadge.classList.add('hidden');
+            }
+        }
+
+        function updateBedsUI() {
+            beds.forEach((bed, idx) => {
+                const card = document.getElementById(`bed-card-${idx}`);
+                const emptyDiv = document.getElementById(`bed-empty-${idx}`);
+                const occupiedDiv = document.getElementById(`bed-occupied-${idx}`);
+                const tag = document.getElementById(`bed-status-tag-${idx}`);
+
+                if (bed.occupied) {
+                    card.className = "border-2 border-indigo-500 rounded-xl p-5 bg-white shadow-md transition relative pulse-bed";
+                    emptyDiv.classList.add('hidden');
+                    occupiedDiv.classList.remove('hidden');
+
+                    tag.textContent = "入住中 (點滴滴注中)";
+                    tag.className = "bg-indigo-100 text-indigo-800 text-xs px-2 py-0.5 rounded font-bold";
+
+                    document.getElementById(`bed-patient-name-${idx}`).textContent = bed.patient.name;
+                    document.getElementById(`bed-patient-id-${idx}`).textContent = `#${bed.patient.id}`;
+                    document.getElementById(`bed-patient-disease-${idx}`).textContent = bed.patient.diseaseName;
+                    document.getElementById(`bed-patient-iv-${idx}`).textContent = bed.patient.ivText;
+
+                    updateSingleBedUI(idx);
+                } else {
+                    card.className = "border-2 border-dashed border-slate-200 rounded-xl p-5 bg-slate-50/50 transition relative";
+                    emptyDiv.classList.remove('hidden');
+                    occupiedDiv.classList.add('hidden');
+
+                    tag.textContent = "空床中";
+                    tag.className = "bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded font-medium";
+                }
+            });
+        }
+
+        function updateSingleBedUI(idx) {
+            const bed = beds[idx];
+            if (!bed.occupied) return;
+
+            const m = Math.floor(bed.remainingSec / 60);
+            const s = bed.remainingSec % 60;
+            const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            
+            document.getElementById(`bed-time-remaining-${idx}`).textContent = timeStr;
+
+            const progress = ((bed.durationTotalSec - bed.remainingSec) / bed.durationTotalSec) * 100;
+            document.getElementById(`bed-progress-${idx}`).style.width = `${Math.min(100, Math.max(0, progress))}%`;
+
+            // 更新巡房追加文字
+            const roundsAddEl = document.getElementById(`bed-patient-rounds-add-${idx}`);
+            if (bed.roundsAddedDrugs.length > 0) {
+                roundsAddEl.textContent = bed.roundsAddedDrugs.map(d => d.name).join(', ');
+            } else {
+                roundsAddEl.textContent = "無（點擊巡房按鈕追加）";
+            }
+
+            const btnDischarge = document.getElementById(`btn-discharge-${idx}`);
+            if (bed.remainingSec <= 0) {
+                btnDischarge.disabled = false;
+                btnDischarge.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 text-xs rounded transition shadow";
+                btnDischarge.textContent = "✅ 點滴完畢，辦理出院與結算康復度";
+            } else {
+                btnDischarge.disabled = true;
+                btnDischarge.className = "w-full bg-slate-200 text-slate-400 font-bold py-2 text-xs rounded cursor-not-allowed transition";
+                btnDischarge.textContent = "🏥 點滴滴注中...";
+            }
+        }
+
+        function speedUpBed(idx, mins) {
+            if (beds[idx].occupied) {
+                beds[idx].remainingSec = Math.max(0, beds[idx].remainingSec - (mins * 60));
+                updateSingleBedUI(idx);
+            }
+        }
+
+        // =========================================================================
+        // 10. 診所藥房管理
+        // =========================================================================
+        function renderPharmacyTable() {
+            const tbody = document.getElementById('pharmacy-table-body');
+            tbody.innerHTML = '';
+
+            drugDatabase.forEach((drug) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-800">${drug.name}</td>
+                    <td class="p-3"><span class="bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded-full">${drug.category}</span></td>
+                    <td class="p-3 text-slate-600">${drug.indications.join(', ')}</td>
+                    <td class="p-3 text-slate-600">${drug.reqFreq} (${drug.reqDose || '1錠'})</td>
+                    <td class="p-3 text-right">
+                        <button onclick="deleteDrug('${drug.id}')" class="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded text-xs transition font-bold">
+                            🗑️ 刪除
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function deleteDrug(drugId) {
+            if (confirm('確定要從診所藥房刪除此藥物/針劑嗎？')) {
+                drugDatabase = drugDatabase.filter(d => d.id !== drugId);
+                renderPharmacyTable();
+                renderDrugOptions();
+            }
+        }
+
+        function openAddDrugModal() {
+            document.getElementById('modal-add-drug').classList.remove('hidden');
+        }
+
+        function closeAddDrugModal() {
+            document.getElementById('modal-add-drug').classList.add('hidden');
+        }
+
+        function saveNewDrug() {
+            const name = document.getElementById('new-drug-name').value.trim();
+            const cat = document.getElementById('new-drug-cat').value;
+            const indStr = document.getElementById('new-drug-indications').value.trim();
+            const freq = document.getElementById('new-drug-freq').value;
+
+            if (!name || !indStr) {
+                alert('請填寫完整的藥品名稱與適應症！');
+                return;
+            }
+
+            const newId = 'd_custom_' + Date.now();
+            const indications = indStr.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+
+            drugDatabase.push({
+                id: newId,
+                name: name,
+                category: cat,
+                indications: indications,
+                reqFreq: freq,
+                reqDose: cat === '點滴/注射針劑' ? '1瓶/靜脈滴注' : '1錠(包)'
+            });
+
+            renderPharmacyTable();
+            renderDrugOptions();
+            closeAddDrugModal();
+
+            document.getElementById('new-drug-name').value = '';
+            document.getElementById('new-drug-indications').value = '';
+        }
+    </script>
+</body>
+</html>
